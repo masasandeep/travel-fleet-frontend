@@ -407,4 +407,38 @@ export const api = {
     const res = await apiClient.post('/tenants/onboard', data);
     return res.data;
   },
+
+  // 13. SaaS Platform Owner / SuperAdmin Cockpit
+  getOwnerStats: async (): Promise<any> => {
+    const res = await apiClient.get('/owner/stats');
+    return res.data.data;
+  },
+  getOwnerTenants: async (): Promise<any[]> => {
+    const res = await apiClient.get('/owner/tenants');
+    return res.data.data;
+  },
+  toggleTenantStatus: async (idOrSlug: string): Promise<any> => {
+    const res = await apiClient.patch(`/owner/tenants/${idOrSlug}/status`);
+    return res.data;
+  },
+
+  // 14. Fleet Admin Staff & Sub-Admins Management
+  getStaffMembers: async (): Promise<any[]> => {
+    const res = await apiClient.get('/admin/staff');
+    return res.data.data;
+  },
+  createSubAdmin: async (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    password: string;
+    designation?: string;
+  }): Promise<any> => {
+    const res = await apiClient.post('/admin/staff', data);
+    return res.data;
+  },
+  deleteStaffMember: async (id: string): Promise<any> => {
+    const res = await apiClient.delete(`/admin/staff/${id}`);
+    return res.data;
+  },
 };

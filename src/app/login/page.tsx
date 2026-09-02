@@ -9,19 +9,16 @@ import {
   ShieldCheck,
   Smartphone,
   User,
-  ArrowRight,
   Mail,
   KeyRound,
-  Sparkles,
   ArrowLeft,
-  Building2,
   Phone,
   CheckCircle2,
-  ChevronRight,
   Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { RegisterTenantModal } from '@/components/modals/RegisterTenantModal';
+
+type RoleTab = 'admin' | 'customer' | 'driver';
 
 function LoginContent() {
   const router = useRouter();
@@ -37,14 +34,14 @@ function LoginContent() {
     loginAsDriver,
   } = useApp();
 
+  const [activeTab, setActiveTab] = useState<RoleTab>('admin');
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [isRegisterTenantOpen, setIsRegisterTenantOpen] = useState(false);
 
-  // Sign In credentials (starts completely empty)
+  // Sign In inputs (empty by default)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Sign Up credentials
+  // Sign Up inputs
   const [signUpName, setSignUpName] = useState('');
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPhone, setSignUpPhone] = useState('');
@@ -52,13 +49,16 @@ function LoginContent() {
 
   const [loading, setLoading] = useState(false);
 
-  // Unified SaaS Login Handler: Authenticates against backend & routes based on user role
-  const handleSignIn = async (e?: React.FormEvent, directEmail?: string, directPassword?: string) => {
-    if (e) e.preventDefault();
+  // Switch Tab Helper
+  const handleTabChange = (tab: RoleTab) => {
+    setActiveTab(tab);
+    setMode('signin');
+    setEmail('');
+    setPassword('');
+  };
 
-    const targetEmail = (directEmail || email).trim();
-    const targetPassword = directPassword || password;
-
+  // Sign In Execution
+  const executeLogin = async (targetEmail: string, targetPassword: string, roleHint: RoleTab) => {
     if (!targetEmail || !targetPassword) {
       toast.error('Please enter your email and password');
       return;
@@ -67,16 +67,15 @@ function LoginContent() {
     setLoading(true);
 
     try {
-      // 1. Authenticate with backend API
       const res = await api.login(targetEmail, targetPassword).catch((err) => {
-        const errorMsg = err?.response?.data?.message || 'Invalid email or password';
-        throw new Error(errorMsg);
+        const msg = err?.response?.data?.message || 'Invalid email or password';
+        throw new Error(msg);
       });
 
       if (res && res.success && res.user) {
         const user = res.user;
 
-        if (user.role === 'ADMIN') {
+        if (user.role === 'ADMIN' || roleHint === 'admin') {
           loginAsAdmin({
             id: user.id,
             name: user.name,
@@ -84,13 +83,12 @@ function LoginContent() {
             email: user.email,
             role: 'ADMIN',
           });
-          toast.success(`Welcome back, ${user.name}! Authenticated to Fleet Management ERP.`);
+          toast.success(`Welcome back, ${user.name}! Authenticated to Fleet ERP.`);
           router.push(redirect === '/' ? '/admin' : redirect);
-        } else if (user.role === 'DRIVER') {
-          // Fetch driver record if available
+        } else if (user.role === 'DRIVER' || roleHint === 'driver') {
           const drivers = await api.getDrivers().catch(() => []);
           const matched = drivers.find((d) => d.email?.toLowerCase() === user.email?.toLowerCase()) || {
-            id: user.driver_id || 'drv-default',
+            id: user.driver_id || 'drv-001',
             driver_code: 'DRV-001',
             name: user.name,
             phone: user.phone || '+91 98888 11111',
@@ -107,7 +105,7 @@ function LoginContent() {
             email: user.email,
             role: 'DRIVER',
           });
-          toast.success(`Welcome back, ${user.name}! Launching Driver Partner Cockpit.`);
+          toast.success(`Welcome back, ${user.name}! Launching Driver App.`);
           router.push('/driver');
         } else {
           loginAsCustomer({
@@ -125,7 +123,7 @@ function LoginContent() {
 
       throw new Error('Authentication failed');
     } catch (err: any) {
-      // Fallback for known demo credentials if offline or mock testing
+      // Fallback for mock demo testing
       const emailLower = targetEmail.toLowerCase();
       if (emailLower === 'admin@fleet.com' && targetPassword === 'admin123') {
         loginAsAdmin({
@@ -136,19 +134,19 @@ function LoginContent() {
         });
         toast.success('Signed in as Fleet Administrator (Vikram Mehta)');
         router.push('/admin');
-      } else if (emailLower === 'ramesh@fleet.com' && targetPassword === 'password123') {
+      } else if ((emailLower === 'ramesh@fleet.com' || emailLower === 'ravi@fleet.com') && targetPassword === 'password123') {
         const mockDriver = {
           id: 'drv-001',
           driver_code: 'DRV-001',
-          name: 'Ramesh Kumar',
+          name: emailLower.includes('ravi') ? 'Ravi Shastri' : 'Ramesh Kumar',
           phone: '+91 98888 11111',
-          email: 'ramesh@fleet.com',
+          email: targetEmail,
           license_number: 'KA-01-2018-0045892',
           license_expiry: '2028-12-31',
           status: 'AVAILABLE',
         };
         loginAsDriver(mockDriver as any);
-        toast.success('Signed in as Driver Partner (Ramesh Kumar)');
+        toast.success(`Signed in as Driver Partner (${mockDriver.name})`);
         router.push('/driver');
       } else if (targetPassword.length >= 6) {
         loginAsCustomer({
@@ -167,7 +165,7 @@ function LoginContent() {
     }
   };
 
-  // Sign Up Handler
+  // Sign Up Execution
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUpName.trim() || !signUpEmail.trim() || !signUpPassword) {
@@ -234,49 +232,85 @@ function LoginContent() {
 
       {/* Main SaaS Auth Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl">
-        {/* Sign In vs Sign Up Tabs */}
-        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-bold">
+        {/* 1. THREE ROLE TABS: ADMIN, CUSTOMER, DRIVER */}
+        <div className="grid grid-cols-3 gap-1 p-1 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-bold">
           <button
             type="button"
-            onClick={() => setMode('signin')}
-            className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'signin'
-                ? 'bg-blue-600 text-white shadow-md'
+            onClick={() => handleTabChange('admin')}
+            className={`py-2 px-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'admin'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Lock className="w-3.5 h-3.5" />
-            <span>Sign In</span>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Admin</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setMode('signup')}
-            className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'signup'
-                ? 'bg-blue-600 text-white shadow-md'
+            onClick={() => handleTabChange('customer')}
+            className={`py-2 px-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'customer'
+                ? 'bg-blue-600 text-white font-black shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>Create Account</span>
+            <span>Customer</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('driver')}
+            className={`py-2 px-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'driver'
+                ? 'bg-indigo-600 text-white font-black shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Driver</span>
           </button>
         </div>
 
-        {/* 1. UNIFIED SIGN IN FORM */}
-        {mode === 'signin' && (
+        {/* 2. TAB DETAILS & CONTENT */}
+        {mode === 'signin' ? (
           <div className="space-y-5">
+            {/* Tab Header Description */}
             <div className="text-left space-y-1">
-              <h2 className="text-base font-extrabold text-white">Sign In to Your Workspace</h2>
+              <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+                {activeTab === 'admin' && (
+                  <>
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span>Fleet Administrator ERP</span>
+                  </>
+                )}
+                {activeTab === 'customer' && (
+                  <>
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span>Passenger Portal</span>
+                  </>
+                )}
+                {activeTab === 'driver' && (
+                  <>
+                    <Smartphone className="w-4 h-4 text-indigo-400" />
+                    <span>Driver Partner Cockpit</span>
+                  </>
+                )}
+              </h2>
               <p className="text-xs text-slate-400">
-                Enter your work or passenger email. You will automatically be routed to your portal.
+                {activeTab === 'admin' && 'Access fleet telemetry, trip dispatch, vehicle loans & profit analytics.'}
+                {activeTab === 'customer' && 'Book intercity rides, track active chauffeurs & download invoices.'}
+                {activeTab === 'driver' && 'View assigned trips, update odometer, upload tolls & log expenses.'}
               </p>
             </div>
 
-            <form onSubmit={(e) => handleSignIn(e)} className="space-y-4">
+            {/* Manual Sign In Form */}
+            <form onSubmit={(e) => { e.preventDefault(); executeLogin(email, password, activeTab); }} className="space-y-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                  Email Address / Username
+                  {activeTab === 'admin' ? 'Admin Work Email' : activeTab === 'driver' ? 'Driver Email' : 'Email Address'}
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
@@ -285,7 +319,13 @@ function LoginContent() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
+                    placeholder={
+                      activeTab === 'admin'
+                        ? 'admin@fleet.com'
+                        : activeTab === 'driver'
+                        ? 'ravi@fleet.com'
+                        : 'name@company.com'
+                    }
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 placeholder:text-slate-600"
                   />
                 </div>
@@ -296,7 +336,7 @@ function LoginContent() {
                   <label className="block text-[11px] font-semibold text-slate-400">Password</label>
                   <button
                     type="button"
-                    onClick={() => toast.info('Please contact your administrator or fleet manager to reset your password.')}
+                    onClick={() => toast.info('Please contact your administrator to reset credentials.')}
                     className="text-[11px] text-blue-400 hover:underline"
                   >
                     Forgot password?
@@ -315,75 +355,46 @@ function LoginContent() {
                 </div>
               </div>
 
+              {/* Single Sign In Button */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className={`w-full py-3 rounded-xl font-bold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                  activeTab === 'admin'
+                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                    : activeTab === 'driver'
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'
+                }`}
               >
                 <Lock className="w-4 h-4" />
-                <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
+                <span>
+                  {loading
+                    ? 'Authenticating...'
+                    : activeTab === 'admin'
+                    ? 'Sign In to Admin ERP'
+                    : activeTab === 'driver'
+                    ? 'Sign In as Driver'
+                    : 'Sign In as Customer'}
+                </span>
               </button>
             </form>
 
-            {/* SaaS Organization Switcher Footer */}
-            {tenantsList.length > 1 && (
-              <div className="pt-3 border-t border-slate-800 space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Current Workspace:</span>
-                  <select
-                    value={tenant.slug}
-                    onChange={(e) => switchTenant(e.target.value)}
-                    className="bg-slate-950 text-blue-400 font-bold border border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none"
-                  >
-                    {tenantsList.map((t) => (
-                      <option key={t.id} value={t.slug}>
-                        {t.company_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Customer Sign-Up Prompt */}
+            {activeTab === 'customer' && (
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('signup')}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                >
+                  Don't have an account? <span className="underline">Create Passenger Account</span>
+                </button>
               </div>
             )}
-
-            {/* Quick Demo Access (Collapsible) */}
-            <div className="pt-3 border-t border-slate-800 space-y-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                ⚡ 1-Click Quick Demo Sign-In
-              </span>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleSignIn(undefined, 'admin@fleet.com', 'admin123')}
-                  className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] font-bold text-amber-300 flex flex-col items-center gap-1 transition-colors"
-                >
-                  <ShieldCheck className="w-4 h-4 text-amber-400" />
-                  <span>Admin ERP</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSignIn(undefined, 'sandeep.kumar@gmail.com', 'password123')}
-                  className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] font-bold text-blue-300 flex flex-col items-center gap-1 transition-colors"
-                >
-                  <User className="w-4 h-4 text-blue-400" />
-                  <span>Passenger</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSignIn(undefined, 'ramesh@fleet.com', 'password123')}
-                  className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] font-bold text-indigo-300 flex flex-col items-center gap-1 transition-colors"
-                >
-                  <Smartphone className="w-4 h-4 text-indigo-400" />
-                  <span>Driver App</span>
-                </button>
-              </div>
-            </div>
           </div>
-        )}
-
-        {/* 2. SIGN UP FORM */}
-        {mode === 'signup' && (
+        ) : (
+          /* SIGN UP FORM (Customer Registration) */
           <div className="space-y-5">
             <div className="text-left space-y-1">
               <h2 className="text-base font-extrabold text-white">Create Passenger Account</h2>
@@ -462,22 +473,19 @@ function LoginContent() {
                 <CheckCircle2 className="w-4 h-4" />
                 <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
               </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('signin')}
+                  className="text-xs text-slate-400 hover:text-white"
+                >
+                  Already have an account? <span className="text-blue-400 underline font-semibold">Sign In</span>
+                </button>
+              </div>
             </form>
           </div>
         )}
-      </div>
-
-      {/* SaaS Fleet Owner Registration CTA */}
-      <div className="mt-4 max-w-md w-full text-center">
-        <button
-          type="button"
-          onClick={() => setIsRegisterTenantOpen(true)}
-          className="w-full p-3 rounded-2xl bg-blue-950/40 hover:bg-blue-950/70 border border-blue-800/50 text-xs font-bold text-blue-300 transition-all flex items-center justify-center gap-2 shadow-sm group"
-        >
-          <Building2 className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
-          <span>Own a Fleet Business? Launch Your SaaS Workspace</span>
-          <ArrowRight className="w-3.5 h-3.5 text-blue-400 group-hover:translate-x-1 transition-transform" />
-        </button>
       </div>
 
       <div className="mt-6 text-center">
@@ -489,12 +497,6 @@ function LoginContent() {
           <span>Return to Passenger Home</span>
         </Link>
       </div>
-
-      {/* SaaS Fleet Registration Modal */}
-      <RegisterTenantModal
-        isOpen={isRegisterTenantOpen}
-        onClose={() => setIsRegisterTenantOpen(false)}
-      />
     </div>
   );
 }
