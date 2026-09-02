@@ -388,4 +388,23 @@ export const api = {
     const res = await apiClient.post('/tenants', data);
     return res.data.data;
   },
+  onboardTenant: async (data: {
+    company_name: string;
+    slug: string;
+    tagline?: string;
+    logo_url?: string;
+    primary_phone: string;
+    secondary_phone?: string;
+    whatsapp_number?: string;
+    support_email?: string;
+    address?: string;
+    admin_name: string;
+    admin_email: string;
+    admin_phone?: string;
+    admin_password: string;
+    plan?: string;
+  }): Promise<any> => {
+    const res = await apiClient.post('/tenants/onboard', data);
+    return res.data;
+  },
 };
