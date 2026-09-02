@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: latravels_db
+    restart: always
+    environment:
+      POSTGRES_USER: latravels
+      POSTGRES_PASSWORD: secure_fleet_password_2026
+      POSTGRES_DB: fleet_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U latravels -d fleet_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Go Backend API (Gin)
+  backend:
+    build:
+      context: ./travel-fleet-backend
+      dockerfile: Dockerfile
+    container_name: latravels_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENV: production
+      PORT: 5001
+      DATABASE_URL: "postgres://latravels:secure_fleet_password_2026@postgres:5432/fleet_erp?sslmode=disable"
+      JWT_SECRET: "latravels_erp_super_secret_jwt_key_2026"
+      CORS_ORIGIN: "http://localhost:3000,http://localhost"
+    ports:
+      - "5001:5001"
+
+  # 3. Next.js Frontend
+  frontend:
+    build:
+      context: ./travel-fleet-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:5001/api/v1"
+    container_name: latravels_frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+    driver: local
