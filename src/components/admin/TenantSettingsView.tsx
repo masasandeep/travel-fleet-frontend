@@ -13,17 +13,17 @@ import {
   Sparkles,
   CheckCircle2,
   Globe,
-  PlusCircle,
   MessageSquare,
   Shield,
-  ExternalLink,
-  Layers,
+  UserPlus,
+  Users,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal } from '@/components/common/Modal';
+import { AddSubAdminModal } from '@/components/modals/AddSubAdminModal';
 
 export const TenantSettingsView: React.FC = () => {
-  const { tenant, tenantsList, switchTenant, updateTenantSettings, refreshKey, triggerRefresh } = useApp();
+  const { tenant, updateTenantSettings, refreshKey, triggerRefresh } = useApp();
 
   const [companyName, setCompanyName] = useState('');
   const [tagline, setTagline] = useState('');
@@ -37,12 +37,10 @@ export const TenantSettingsView: React.FC = () => {
 
   const [saving, setSaving] = useState(false);
 
-  // New Organization Modal
-  const [isNewOrgModalOpen, setIsNewOrgModalOpen] = useState(false);
-  const [newSlug, setNewSlug] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('');
-  const [newSubmitting, setNewSubmitting] = useState(false);
+  // Sub-Admins & Staff Members
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
 
   useEffect(() => {
     if (tenant) {
@@ -56,7 +54,20 @@ export const TenantSettingsView: React.FC = () => {
       setAddress(tenant.address || '');
       setGstNumber(tenant.gst_number || '');
     }
+    loadStaffMembers();
   }, [tenant, refreshKey]);
+
+  const loadStaffMembers = async () => {
+    try {
+      setLoadingStaff(true);
+      const staff = await api.getStaffMembers();
+      setStaffMembers(staff || []);
+    } catch (err) {
+      // Handled silently
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +87,7 @@ export const TenantSettingsView: React.FC = () => {
         address: address.trim() || undefined,
         gst_number: gstNumber.trim().toUpperCase() || undefined,
       });
+      toast.success('Organization branding and helpline settings saved successfully!');
     } catch (err) {
       // Error handled in context
     } finally {
@@ -83,33 +95,14 @@ export const TenantSettingsView: React.FC = () => {
     }
   };
 
-  const handleCreateOrg = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSlug.trim() || !newName.trim() || !newPhone.trim()) {
-      return toast.error('Organization Name, Slug, and Primary Helpline are required');
-    }
-
-    setNewSubmitting(true);
+  const handleDeleteStaff = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove sub-admin "${name}"?`)) return;
     try {
-      const created = await api.registerTenant({
-        slug: newSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        company_name: newName.trim(),
-        primary_phone: newPhone.trim(),
-        logo_url: '/logo.png',
-        tagline: 'Better journeys begin here',
-      });
-
-      toast.success(`Organization "${created.company_name}" registered on SaaS platform!`);
-      setIsNewOrgModalOpen(false);
-      setNewSlug('');
-      setNewName('');
-      setNewPhone('');
-      await switchTenant(created.slug);
-      triggerRefresh();
+      await api.deleteStaffMember(id);
+      toast.success(`Sub-admin "${name}" removed successfully`);
+      loadStaffMembers();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to register organization');
-    } finally {
-      setNewSubmitting(false);
+      toast.error(err?.response?.data?.message || 'Failed to remove staff member');
     }
   };
 
@@ -120,73 +113,26 @@ export const TenantSettingsView: React.FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-              Fleet Organization & Helpline Settings
+              Fleet Organization & Helplines
             </h1>
             <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold">
-              SaaS Multi-Tenant Mode
+              {tenant.plan || 'PRO'} Plan
             </span>
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-            Manage company branding, primary and secondary dispatch helpline numbers, and WhatsApp links.
+            Manage company branding, dispatch helpline numbers, WhatsApp booking links, and operations sub-admins.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={() => setIsNewOrgModalOpen(true)}
+          onClick={() => setIsAddStaffModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/20 active:scale-95 transition-all self-start sm:self-auto"
         >
-          <PlusCircle className="w-4 h-4" />
-          <span>+ Register New Organization</span>
+          <UserPlus className="w-4 h-4" />
+          <span>+ Add Shift Sub-Admin</span>
         </button>
       </div>
-
-      {/* Multi-Tenant Switcher Card */}
-      {tenantsList.length > 0 && (
-        <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Active SaaS Organizations on Platform ({tenantsList.length})
-              </h3>
-            </div>
-            <span className="text-[11px] text-slate-500">Tap to switch active fleet</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {tenantsList.map((t) => {
-              const isSelected = t.slug === tenant.slug;
-              return (
-                <button
-                  key={t.id || t.slug}
-                  type="button"
-                  onClick={() => switchTenant(t.slug)}
-                  className={`p-3.5 rounded-xl border text-left transition-all flex items-center justify-between ${
-                    isSelected
-                      ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-600 ring-1 ring-blue-600/30 text-blue-950 dark:text-white shadow-xs'
-                      : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
-                  }`}
-                >
-                  <div className="min-w-0 pr-2 space-y-0.5">
-                    <div className="font-bold text-xs truncate">{t.company_name}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                      Helpline: {t.primary_phone}
-                    </div>
-                  </div>
-                  {isSelected ? (
-                    <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold text-[9px] uppercase shrink-0">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-400 font-bold shrink-0">Switch →</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Main Settings Form */}
       <form onSubmit={handleSaveSettings} className="space-y-5">
@@ -200,7 +146,7 @@ export const TenantSettingsView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Company / Brand Name *
+                Company / Fleet Brand Name *
               </label>
               <input
                 type="text"
@@ -208,151 +154,111 @@ export const TenantSettingsView: React.FC = () => {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 placeholder="e.g. LA Travels"
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Brand Tagline
+                Tagline / Subtitle
               </label>
               <input
                 type="text"
                 value={tagline}
                 onChange={(e) => setTagline(e.target.value)}
                 placeholder="e.g. Better journeys begin here"
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Logo URL / Path
+                Brand Logo URL
               </label>
               <input
                 type="text"
                 value={logoUrl}
                 onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="/logo.png"
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
+                placeholder="/logo.png or https://example.com/logo.png"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Organization Slug (Subdomain)
-              </label>
-              <input
-                type="text"
-                disabled
-                value={tenant.slug || 'la-travels'}
-                className="w-full bg-slate-100 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-slate-500 cursor-not-allowed shadow-inner"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 2: Helpline Numbers & Customer Contact Desk */}
-        <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
-            <PhoneCall className="w-4 h-4 text-amber-500" />
-            <div>
-              <h3 className="text-sm font-black text-slate-900 dark:text-white">Helpline Numbers & Customer Dispatch Desk</h3>
-              <p className="text-[11px] text-slate-500">
-                Allows multiple operators/persons to manage customer calls during day/night shifts or separate lines.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Primary 24/7 Helpline Number * (Person 1 / Day Shift)
-              </label>
-              <div className="relative">
-                <PhoneCall className="w-4 h-4 absolute left-3 top-2.5 text-emerald-500" />
-                <input
-                  type="text"
-                  required
-                  value={primaryPhone}
-                  onChange={(e) => setPrimaryPhone(e.target.value)}
-                  placeholder="+91 98888 00001"
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 mt-1">Displayed in top navigation bar and booking receipts.</p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Secondary Helpline (Person 2 / Night Dispatch / Escalation)
-              </label>
-              <div className="relative">
-                <PhoneCall className="w-4 h-4 absolute left-3 top-2.5 text-blue-500" />
-                <input
-                  type="text"
-                  value={secondaryPhone}
-                  onChange={(e) => setSecondaryPhone(e.target.value)}
-                  placeholder="+91 97777 00002"
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 mt-1">Available in customer helpline popup menu.</p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                WhatsApp Business Link Number
-              </label>
-              <div className="relative">
-                <MessageSquare className="w-4 h-4 absolute left-3 top-2.5 text-emerald-500" />
-                <input
-                  type="text"
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  placeholder="+91 98888 00001"
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 mt-1">Powers 1-tap WhatsApp chat button for passengers.</p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Customer Support Email
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-blue-500" />
-                <input
-                  type="email"
-                  value={supportEmail}
-                  onChange={(e) => setSupportEmail(e.target.value)}
-                  placeholder="support@latravels.com"
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 3: Legal & Invoicing */}
-        <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
-            <FileText className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-black text-slate-900 dark:text-white">Tax Invoicing & Headquarters Address</h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                GSTIN / Tax Identification Number
+                GST / Tax Registration Number
               </label>
               <input
                 type="text"
                 value={gstNumber}
                 onChange={(e) => setGstNumber(e.target.value)}
                 placeholder="29AAAAA0000A1Z5"
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold uppercase text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Helplines & WhatsApp */}
+        <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+            <PhoneCall className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">Customer Support & Dispatch Helplines</h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Primary 24/7 Helpline *
+              </label>
+              <input
+                type="text"
+                required
+                value={primaryPhone}
+                onChange={(e) => setPrimaryPhone(e.target.value)}
+                placeholder="+91 98888 00001"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Secondary Helpline (Optional)
+              </label>
+              <input
+                type="text"
+                value={secondaryPhone}
+                onChange={(e) => setSecondaryPhone(e.target.value)}
+                placeholder="+91 97777 00002"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                WhatsApp Direct Link
+              </label>
+              <input
+                type="text"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="+91 98888 00001"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Official Support Email
+              </label>
+              <input
+                type="email"
+                value={supportEmail}
+                onChange={(e) => setSupportEmail(e.target.value)}
+                placeholder="support@latravels.com"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
@@ -364,19 +270,19 @@ export const TenantSettingsView: React.FC = () => {
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="100 Feet Road, Indiranagar, Bangalore, Karnataka"
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
+                placeholder="100 Feet Road, Indiranagar, Bangalore"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex justify-end gap-3 pt-2">
+        {/* Save Button */}
+        <div className="flex justify-end">
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/25 active:scale-95 disabled:opacity-50 transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all"
           >
             <Save className="w-4 h-4" />
             <span>{saving ? 'Saving Changes...' : 'Save Organization & Helpline Settings'}</span>
@@ -384,80 +290,90 @@ export const TenantSettingsView: React.FC = () => {
         </div>
       </form>
 
-      {/* Register New Organization Modal */}
-      <Modal
-        isOpen={isNewOrgModalOpen}
-        onClose={() => setIsNewOrgModalOpen(false)}
-        title="Register New Fleet Organization"
-        subtitle="Onboard a new independent travel company onto the SaaS platform"
-        maxWidth="md"
-      >
-        <form onSubmit={handleCreateOrg} className="space-y-4">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Organization Name *
-            </label>
-            <input
-              type="text"
-              required
-              value={newName}
-              onChange={(e) => {
-                setNewName(e.target.value);
-                if (!newSlug) {
-                  setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-'));
-                }
-              }}
-              placeholder="e.g. Apex Luxury Fleets"
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-            />
+      {/* Section 3: Operations Sub-Admins & Shift Dispatchers */}
+      <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">
+              Operations Team & Shift Sub-Admins
+            </h3>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Organization Slug (URL identifier) *
-            </label>
-            <input
-              type="text"
-              required
-              value={newSlug}
-              onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-              placeholder="e.g. apex-fleets"
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsAddStaffModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold hover:bg-blue-100 transition-colors"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>+ Add Staff Member</span>
+          </button>
+        </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Primary Helpline Number *
-            </label>
-            <input
-              type="text"
-              required
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              placeholder="+91 91234 56789"
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 shadow-inner"
-            />
-          </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Sub-admins can log in during night shifts or operational hours to assign drivers, start trips, and manage live dispatches when the main fleet owner is offline.
+        </p>
 
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => setIsNewOrgModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={newSubmitting}
-              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50 transition-all"
-            >
-              {newSubmitting ? 'Registering...' : 'Register Organization'}
-            </button>
+        {loadingStaff ? (
+          <div className="py-6 text-center text-xs text-slate-500">Loading operations staff...</div>
+        ) : staffMembers.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-400 space-y-2">
+            <Shield className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto" />
+            <div>No sub-admins added yet</div>
+            <p className="text-[11px] text-slate-500">
+              Click "+ Add Shift Sub-Admin" to create credentials for your dispatch staff.
+            </p>
           </div>
-        </form>
-      </Modal>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+            {staffMembers.map((member) => (
+              <div key={member.id} className="p-3.5 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/40">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs ${
+                    member.role === 'ADMIN' || member.role === 'SUPERADMIN' ? 'bg-amber-600' : 'bg-blue-600'
+                  }`}>
+                    {member.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">{member.name}</span>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                        member.role === 'ADMIN' || member.role === 'SUPERADMIN'
+                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400'
+                          : 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-400'
+                      }`}>
+                        {member.role === 'ADMIN' || member.role === 'SUPERADMIN' ? 'Primary Owner' : 'Operations Sub-Admin'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 flex items-center gap-3 mt-0.5">
+                      <span>{member.email}</span>
+                      {member.phone && <span>• {member.phone}</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {member.role === 'SUB_ADMIN' && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteStaff(member.id, member.name)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                    title="Remove Sub-Admin"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add Sub-Admin Modal */}
+      <AddSubAdminModal
+        isOpen={isAddStaffModalOpen}
+        onClose={() => setIsAddStaffModalOpen(false)}
+        onSuccess={loadStaffMembers}
+      />
     </div>
   );
 };

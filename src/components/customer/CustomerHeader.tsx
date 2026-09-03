@@ -34,17 +34,13 @@ export const CustomerHeader: React.FC = () => {
     unreadNotificationCount,
     markNotificationsAsRead,
     tenant,
-    tenantsList,
-    switchTenant,
   } = useApp();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHelplineOpen, setIsHelplineOpen] = useState(false);
-  const [isTenantPickerOpen, setIsTenantPickerOpen] = useState(false);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const helplineRef = useRef<HTMLDivElement>(null);
-  const tenantPickerRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns on clicking outside or pressing Escape
   useEffect(() => {
@@ -52,7 +48,6 @@ export const CustomerHeader: React.FC = () => {
       if (e.key === 'Escape') {
         setIsNotifOpen(false);
         setIsHelplineOpen(false);
-        setIsTenantPickerOpen(false);
       }
     };
 
@@ -63,9 +58,6 @@ export const CustomerHeader: React.FC = () => {
       }
       if (helplineRef.current && !helplineRef.current.contains(target)) {
         setIsHelplineOpen(false);
-      }
-      if (tenantPickerRef.current && !tenantPickerRef.current.contains(target)) {
-        setIsTenantPickerOpen(false);
       }
     };
 
@@ -83,7 +75,7 @@ export const CustomerHeader: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-        {/* Brand Logo & Multi-Tenant Switcher */}
+        {/* Brand Logo */}
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-3.5 group">
             <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200/80 dark:border-slate-800 flex items-center justify-center shadow-sm group-hover:shadow-md group-hover:scale-105 transition-all overflow-hidden p-1.5 shrink-0">
@@ -111,54 +103,6 @@ export const CustomerHeader: React.FC = () => {
               </span>
             </div>
           </Link>
-
-          {/* SaaS Tenant Switcher Dropdown (for Multi-Tenant Platforms) */}
-          {tenantsList.length > 1 && (
-            <div ref={tenantPickerRef} className="relative hidden xl:block pl-2">
-              <button
-                type="button"
-                onClick={() => setIsTenantPickerOpen(!isTenantPickerOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shadow-xs"
-                title="Switch Fleet Organization"
-              >
-                <Building2 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                <span className="truncate max-w-[110px]">{tenant.company_name}</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
-
-              {isTenantPickerOpen && (
-                <div className="absolute left-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 space-y-1">
-                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    SaaS Fleet Organizations
-                  </div>
-                  {tenantsList.map((t) => {
-                    const isSelected = t.slug === tenant.slug;
-                    return (
-                      <button
-                        key={t.id || t.slug}
-                        type="button"
-                        onClick={() => {
-                          switchTenant(t.slug);
-                          setIsTenantPickerOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold text-left transition-all ${
-                          isSelected
-                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <div className="truncate">{t.company_name}</div>
-                          <div className="text-[10px] text-slate-400 font-normal truncate">{t.primary_phone}</div>
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Consumer Navigation Links */}
